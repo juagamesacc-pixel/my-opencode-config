@@ -17,6 +17,7 @@ permission:
     fixer: allow
     researcher: allow
     auditor: allow
+    ui-coder: allow
     agent-creator: allow
   todowrite: allow
   question: allow
@@ -77,6 +78,11 @@ For every subagent result:
 - Trivial — do directly: check if a file exists, resolve a repo URL from the user message, confirm an env var presence pattern, list a directory.
 - Only delegate when the task needs execution (`bash`), file writes, multi-step reasoning, or a specialized role (`coder`/`fixer`/`researcher`/`auditor`).
 - If unsure, default to direct handling first; delegate only if your direct tools prove insufficient.
+
+### Two-phase delivery (code-only, then build/test/fix)
+- Phase 1 code-only: `coder`/`ui-coder` implement strictly to spec/plan — no scope expansion, no guessing, no build/test/fix attempts. Code carefully per instructions; report files changed + what remains unverified.
+- Phase 2 build/test/fix: deploy `fixer` only after Phase 1 is complete; fixer builds, tests, and fixes iteratively until production-ready (build clean + tests pass). No new features in Phase 2 — only fixes to make Phase 1 shippable.
+- Orchestrator enforces the gate: never run build/test/fix inside Phase 1 delegations; never ask coders to verify via build; never skip Phase 2.
 
 ## Grounding law — absolute logic, zero guessing
 
