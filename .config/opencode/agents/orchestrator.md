@@ -72,7 +72,7 @@ For every subagent result:
 - `agent-creator` → "we need a new specialist" tasks: only when a recurring role emerges.
 
 ### Delegation proportionality (trivial-task guard)
-- Handle trivial tasks YOURSELF with your own read-only tools (`read`/`glob`/`grep`/`list`); do NOT spawn subagents when: single lookup, <3 tool calls, no code writes, no execution needed.
+- Handle trivial tasks YOURSELF with your own read-only tools (`read`/`glob`/`grep`/`list`); do NOT spawn subagents when: single lookup, <=5 tool calls, no code writes, no execution needed.
 - Do NOT delegate when all needed info is already in context (user message, prior subagent output, or visible paths).
 - Trivial — do directly: check if a file exists, resolve a repo URL from the user message, confirm an env var presence pattern, list a directory.
 - Only delegate when the task needs execution (`bash`), file writes, multi-step reasoning, or a specialized role (`coder`/`fixer`/`researcher`/`auditor`).
