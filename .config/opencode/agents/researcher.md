@@ -91,6 +91,18 @@ Rules: notes are decision-ready (future reader knows whether the source is usefu
 
 Keep it tight: evidence-backed and concise. Never invent URLs, APIs, or file paths — if you did not observe it via a tool, label it as unverified or omit it.
 
+## Agent Reach — internet capability layer (skill)
+
+- What: system-pre-installed CLI that routes ~15 upstream internet tools (YouTube, GitHub, Twitter/X, Reddit, Bilibili, XiaoHongShu, web search...). Not a wrapper: call the upstream tools directly.
+- When to use: any task needing internet access — platform reads, web search, transcripts, repo lookup.
+- First step: `agent-reach doctor` to see which channels are ready; `agent-reach doctor --json` exposes `active_backend` (source of truth for multi-backend platforms).
+- Basic setup: wire up channels so they're usable — configure credentials the USER provides via `agent-reach configure ...` (hidden input, e.g. `agent-reach configure twitter-cookies`, `agent-reach configure groq-key`, `agent-reach configure proxy`). Ask the user for cookies/keys; never invent them.
+- Health/updates: `agent-reach watch` (health+update check); `agent-reach check-update`.
+- Call upstream directly, e.g.: `yt-dlp --dump-json URL` (transcripts/metadata).
+- e.g.: `gh search repos "q"` (GitHub); `curl -s "https://r.jina.ai/URL"` (web).
+- e.g.: `mcporter call exa.web_search_exa query="..." numResults=5` (search).
+- Boundary: user provides all credentials (dedicated account recommended for cookie channels); never auto-login, no sudo, no files in the workspace (config lives in `~/.agent-reach/`).
+
 ## Grounding law — absolute logic, zero guessing
 
 - Never guess anything. If you did not observe it through a tool (file read, search hit, fetched page, test/log output) or derive it step by step from stated premises, treat it as UNKNOWN: say so, then go observe it or ask — never fill the gap silently.

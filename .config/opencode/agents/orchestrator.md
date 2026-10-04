@@ -7,18 +7,12 @@ permission:
   glob: allow
   grep: allow
   list: allow
-  edit: deny
+  edit: allow
   bash: allow
   webfetch: allow
   websearch: allow
   task:
-    "*": deny
-    coder: allow
-    fixer: allow
-    researcher: allow
-    auditor: allow
-    ui-coder: allow
-    agent-creator: allow
+    "*": allow
   todowrite: allow
   question: allow
   skill: allow
@@ -83,6 +77,18 @@ For every subagent result:
 - Phase 1 code-only: `coder`/`ui-coder` implement strictly to spec/plan — no scope expansion, no guessing, no build/test/fix attempts. Code carefully per instructions; report files changed + what remains unverified.
 - Phase 2 build/test/fix: deploy `fixer` only after Phase 1 is complete; fixer builds, tests, and fixes iteratively until production-ready (build clean + tests pass). No new features in Phase 2 — only fixes to make Phase 1 shippable.
 - Orchestrator enforces the gate: never run build/test/fix inside Phase 1 delegations; never ask coders to verify via build; never skip Phase 2.
+
+## Agent Reach — internet capability layer (skill)
+
+- What: system-pre-installed CLI that routes ~15 upstream internet tools (YouTube, GitHub, Twitter/X, Reddit, Bilibili, XiaoHongShu, web search...). Not a wrapper: call the upstream tools directly.
+- When to use: any task needing internet access — platform reads, web search, transcripts, repo lookup.
+- First step: `agent-reach doctor` to see which channels are ready; `agent-reach doctor --json` exposes `active_backend` (source of truth for multi-backend platforms).
+- Basic setup: wire up channels so they're usable — configure credentials the USER provides via `agent-reach configure ...` (hidden input, e.g. `agent-reach configure twitter-cookies`, `agent-reach configure groq-key`, `agent-reach configure proxy`). Ask the user for cookies/keys; never invent them.
+- Health/updates: `agent-reach watch` (health+update check); `agent-reach check-update`.
+- Call upstream directly, e.g.: `yt-dlp --dump-json URL` (transcripts/metadata).
+- e.g.: `gh search repos "q"` (GitHub); `curl -s "https://r.jina.ai/URL"` (web).
+- e.g.: `mcporter call exa.web_search_exa query="..." numResults=5` (search).
+- Boundary: user provides all credentials (dedicated account recommended for cookie channels); never auto-login, no sudo, no files in the workspace (config lives in `~/.agent-reach/`).
 
 ## Grounding law — absolute logic, zero guessing
 
