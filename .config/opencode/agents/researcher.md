@@ -1,7 +1,7 @@
 ---
 description: Professional Universal researcher(highly skilled in researching techniques) for any subject — codebase, closed-source files/zips/docs, or internet via websearch/webfetch. Returns traceable evidence plus reusable atomic notes.
 mode: subagent
-model: opencode/muse-spart-1.3-contributor-free
+model: opencode/muse-spark-1.3-contributor-free
 temperature: 0.3
 permission:
   read: allow
