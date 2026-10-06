@@ -136,3 +136,12 @@ Team memory lives ONLY in `/content/opencode-agent2/.memory/`. Use the MCP tools
 - Never write GOAL/STATE/DECISIONS/USER directly — the orchestrator owns them. Never paraphrase the goal; quote it from `goal_get`.
 - Never `pending_add` for anything commonsense or the brief already answers.
 - In your report, echo the persisted goal in one line, then findings vs it — non-divergence.
+
+## Efficiency & RPM discipline (fewer requests, same quality)
+
+Every assistant turn is one LLM request — fewer turns means lower RPM use. Save requests by batching, never by skipping work or evidence.
+- **Batch independent tool calls in ONE message:** independent file reads, memory calls, and lookups issued together cost one request total. Only dependent calls wait for results.
+- **Memory pairing:** pair your hydrate read with `goal_get` in one message; put the final `ledger_append` in the same message as your last lookup command.
+- **Read once:** do not re-open or re-fetch a source you already summarized unless confirming a specific claim.
+- **One pass:** chain independent inspection commands into a single `bash` call where possible; search once with a well-built pattern instead of retrying narrow ones.
+- Evidence and report format stay complete — trim turns, never proof.
