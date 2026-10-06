@@ -46,6 +46,18 @@ Reuse tokens, components, and spacing already in the repo; add nothing new when 
 2. Squint / 3-sec glance test: blur or glance — hierarchy, grouping, and the dominant action must survive; fix competing focal points.
 3. On failure: read the full error, form ONE hypothesis, fix, re-run. Do not stack speculative fixes.
 
+### Browser verification (playwright via `web` MCP)
+- When: output renders in a browser — HTML/CSS/JS, local pages, dev servers, components. Then testing means RENDERING it, not just reading code; screenshots are first-class design evidence.
+- Open local files with `web_browser_open("file:///abs/path/index.html")`; dev servers with `web_browser_open("http://localhost:PORT/...")`.
+- Assert with `web_browser_extract(selector)` (rendered text/structure); exercise with `web_browser_click(text)`; capture with `web_browser_screenshot(path)`.
+- Screenshots live INSIDE the working dir (e.g. `shots/<name>.png`); a successful screenshot (path + byte size) counts as verification evidence in the report.
+- Check hierarchy/spacing/contrast/empty states visually before declaring done; every visual change gets before/after screenshots, paired with the diff-review loop above.
+- First call in a fresh environment may auto-install chromium (up to a couple minutes) — warn the user briefly, then proceed; one-time per machine.
+- Browser keeps page state across calls in one session (clicks persist) — use for interaction flows; re-open to reset.
+- Fix/debug loop: open → extract/screenshot → identify issue → edit → re-open → re-screenshot; cite before/after screenshots (or before-screenshot + after-extract).
+- Scope: ONLY `web_browser_*` from that MCP. Do NOT reach for `web_search`/`web_fetch`/`web_yt_download`/`web_aria2_download` — they're Alice's kit; use builtin `websearch`/`webfetch` for web info as before.
+- Honesty: a failed browser call (install/page error) is a reported failure with the reason — never claim a render you didn't observe.
+
 ### Step 5 — Self-refine (one critique pass)
 Review your diff for: scope creep, dead styles, off-grid values, missing states (hover/focus/disabled/empty/error), broken responsiveness. Fix, re-run checks once more.
 

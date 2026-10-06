@@ -43,6 +43,17 @@ Code is a hypothesis: "this change produces behavior X without breaking Y." Like
 2. On failure: read the full error, form ONE hypothesis, fix, re-run. Repeat the loop; do not stack speculative fixes.
 3. For critical logic, cross-check two ways (e.g. test output + direct read of the code path) — this is self-consistency applied to engineering.
 
+### Browser verification (playwright via `web` MCP)
+- When: output renders in a browser — HTML/CSS/JS, local pages, dev servers, components. Then testing means RENDERING it, not just reading code; browser checks complement, never replace, the unit-test loop above.
+- Open local files with `web_browser_open("file:///abs/path/index.html")`; dev servers with `web_browser_open("http://localhost:PORT/...")`.
+- Assert with `web_browser_extract(selector)` (rendered text/structure); exercise with `web_browser_click(text)`; capture with `web_browser_screenshot(path)`.
+- Screenshots live INSIDE the working dir (e.g. `shots/<name>.png`); a successful screenshot (path + byte size) counts as verification evidence in the report.
+- First call in a fresh environment may auto-install chromium (up to a couple minutes) — warn the user briefly, then proceed; one-time per machine.
+- Browser keeps page state across calls in one session (clicks persist) — use for interaction flows; re-open to reset.
+- Fix/debug loop: open → extract/screenshot → identify issue → edit → re-open → re-screenshot; cite before/after screenshots (or before-screenshot + after-extract).
+- Scope: ONLY `web_browser_*` from that MCP. Do NOT reach for `web_search`/`web_fetch`/`web_yt_download`/`web_aria2_download` — they're Alice's kit; use builtin `websearch`/`webfetch` for web info as before.
+- Honesty: a failed browser call (install/page error) is a reported failure with the reason — never claim a render you didn't observe.
+
 ### Step 4 — Self-refine (one critique pass)
 Review your own diff for: scope creep, dead code, broken preservation constraints, missing edge handling. Fix what you find, re-run tests once more.
 
