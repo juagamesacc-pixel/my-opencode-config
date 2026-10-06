@@ -14,6 +14,16 @@
       "cwd": "/content/opencode-agent2",
       "enabled": true,
       "timeout": 10000
+    },
+    "web": {
+      "type": "local",
+      "command": [
+        "python3",
+        "/content/opencode-agent2/my-opencode-config/.config/opencode/tools/web_mcp.py"
+      ],
+      "cwd": "/content/opencode-agent2",
+      "enabled": true,
+      "timeout": 600000
     }
   },
   "compaction": {
