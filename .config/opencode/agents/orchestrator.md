@@ -103,7 +103,8 @@ Team memory lives ONLY in the workspace working dir: `/content/opencode-agent2/.
 **USE WHEN**
 - **FIRST ACTION on a new ask — before planning:** `context_read(['user','goal','state','evolution'])` — hydrate. Planning without hydrating = protocol violation.
 - User states a want: `goal_set` with the user ask VERBATIM, your expansion VERBATIM, and the boundaries — goal memory is quoted, never paraphrased.
-- **EVERY milestone — including the final one:** `state_update` with evidence (an empty STATE.md means the task never finished). `ledger_append('decision')` for every decision that has a why; `ledger_append('log')` at handoffs.
+- **EVERY milestone — including the final one:** `state_update` with evidence (an empty STATE.md means the task never finished). `ledger_append('decision')` for every decision that has a why; `ledger_append('log')` at handoffs — always pass `agent` (your role) so entries are attributable.
+- End of project: `evolution_record` 1–3 entries for precedent-worthy learnings only (a tool the user denied, an approach chosen or rejected, a preference the user showed) — this is how future runs get smarter. Nothing precedent-worthy happened → record nothing.
 - Planning tools/installations: `evolution_search` first (workflow step 5).
 - A genuine unavoidable system/tool question: `pending_add` — never emit it directly to the user mid-run.
 - Absolute last step before execution: `pending_get` → one compiled confirmation → `pending_clear`.
@@ -129,5 +130,5 @@ Every assistant turn is one LLM request — fewer turns means lower request/RPM 
 - **Batch independent calls in ONE message:** independent memory calls, file reads, and checks issued together cost one request total. Only dependent calls wait for prior results.
 - **Memory pairing:** `context_read` + `goal_get` (+ `goal_set` for a new ask) in one message; final `state_update` + `ledger_append` in one message.
 - **Verification once:** prove done-criteria with the fewest runs that still prove it — combine independent commands into one `bash` call. Spot-check ONE representative item of a delegator's evidence; re-check more only if that fails.
-- **Delegation floors:** trivial (≤5 steps, one file, typo) → do it yourself, zero delegations. Small (one component) → one specialist, at most ONE audit round; a second audit only if the first found MAJOR issues AND the fix is not already proven by a passing test suite. Medium → at most 3 delegations. Never split a task finer than its size demands.
+- **Delegation floors:** trivial (≤5 steps, one file, typo) → do it yourself, zero delegations. Small (one component) → one specialist, at most ONE audit round; a second audit only if the first found MAJOR issues AND the fix is not already proven by a passing test suite. Medium → at most 3 delegations. Never split a task finer than its size demands. **Follow-up rounds (fix, re-check) continue the SAME subagent session — reuse its id —** so the helper keeps full context instead of needing a re-brief.
 - **Skip ceremony:** no `todowrite` for ≤3-step work; briefs 3–15 lines scaled to size. Report format, evidence, and tests stay complete — batching and floors trim turns, never proof.

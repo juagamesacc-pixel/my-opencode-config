@@ -47,7 +47,7 @@ Team memory lives ONLY in `/content/opencode-agent2/.memory/`. Use the MCP tools
 - Never for speculation; never store secrets.
 
 **HOW NOT TO**
-- Never write GOAL/STATE/DECISIONS/USER directly — the orchestrator owns them. Never paraphrase the goal; quote it from `goal_get`.
+- Never write GOAL/STATE/DECISIONS/USER directly — the orchestrator owns them. Never paraphrase the goal; quote it from `goal_get`. Never omit `agent` in `ledger_append` — pass your role name (e.g. `plan`) so log entries are attributable.
 - Never `pending_add` for anything commonsense already answers.
 - In your plan, echo the persisted goal in one line, then the steps — non-divergence.
 
