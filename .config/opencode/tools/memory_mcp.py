@@ -30,6 +30,61 @@ def ensure_dirs(root):
     os.makedirs(os.path.join(root, "archive"), exist_ok=True)
 
 
+SESSION_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+# Reads of these files fall back to the team root when the session-scoped file
+# is missing, so team knowledge stays shared. Every other file is strictly
+# session-scoped, and writes with a valid session id never touch the team root.
+SESSION_READ_THROUGH = ("USER.md", "EVOLUTION.md")
+
+
+def session_id_from_params(params):
+    # Part B sends the session id as JSON-RPC `_meta.sessionId` (spec-reserved
+    # metadata; verified to reach the server over stdio with the vendored MCP
+    # SDK, so no fallback shape exists). Anything else falls back to old
+    # behavior: invalid/absent id -> default root.
+    if not isinstance(params, dict):
+        return None
+    meta = params.get("_meta")
+    if not isinstance(meta, dict):
+        return None
+    sid = meta.get("sessionId")
+    if not isinstance(sid, str):
+        return None
+    if not SESSION_ID_RE.match(sid):
+        return None
+    return sid
+
+
+def resolve_roots(root, params):
+    """Return (effective_root, team_root_or_None) for one tools/call."""
+    sid = session_id_from_params(params)
+    if sid is None:
+        return root, None
+    return os.path.join(root, "sessions", sid), root
+
+
+def read_with_fallback(root, team_root, fname):
+    """Read fname under root, falling back to team_root for shared files.
+
+    Returns the file body, or None when missing in both places. Never creates
+    directories; lock files live next to the files they guard (inside the
+    session dir when session-scoped). A missing session dir is not an error:
+    shared files still fall back to the team root.
+    """
+    if os.path.isdir(root):
+        fpath = os.path.join(root, fname)
+        with file_lock(root, fname, False):
+            if os.path.exists(fpath):
+                return read_text(fpath)
+    if team_root is not None and fname in SESSION_READ_THROUGH and os.path.isdir(team_root):
+        tpath = os.path.join(team_root, fname)
+        with file_lock(team_root, fname, False):
+            if os.path.exists(tpath):
+                return read_text(tpath)
+    return None
+
+
 @contextmanager
 def file_lock(root, name, exclusive=True):
     lock_path = os.path.join(root, "." + name + ".lock")
@@ -60,7 +115,7 @@ def read_text(path):
 
 # ---------------- tools ----------------
 
-def do_goal_set(root, args):
+def do_goal_set(root, args, team_root=None):
     if not isinstance(args, dict):
         raise ValueError("arguments must be an object")
     if "user_ask" not in args:
@@ -111,7 +166,7 @@ def do_goal_set(root, args):
     return "GOAL_SET"
 
 
-def do_goal_get(root, args):
+def do_goal_get(root, args, team_root=None):
     goal_path = os.path.join(root, "GOAL.md")
     if not os.path.isdir(root):
         return "NO_GOAL_SET"
@@ -121,7 +176,7 @@ def do_goal_get(root, args):
         return read_text(goal_path)
 
 
-def do_state_update(root, args):
+def do_state_update(root, args, team_root=None):
     if not isinstance(args, dict):
         raise ValueError("arguments must be an object")
     if "current_step" not in args:
@@ -182,7 +237,7 @@ def do_state_update(root, args):
     return "STATE_UPDATED"
 
 
-def do_context_read(root, args):
+def do_context_read(root, args, team_root=None):
     if args is None:
         args = {}
     if not isinstance(args, dict):
@@ -206,7 +261,7 @@ def do_context_read(root, args):
             raise ValueError("unknown file name: %r. valid names: %s" % (name, ", ".join(valid)))
     if "all" in files:
         files = order_all
-    if not os.path.isdir(root):
+    if team_root is None and not os.path.isdir(root):
         chunks = []
         for name in files:
             chunks.append("===== " + name + " =====\n(missing)")
@@ -214,17 +269,14 @@ def do_context_read(root, args):
     chunks = []
     for name in files:
         fname = mapping[name]
-        fpath = os.path.join(root, fname)
-        with file_lock(root, fname, False):
-            if os.path.exists(fpath):
-                body = read_text(fpath)
-            else:
-                body = "(missing)"
-            chunks.append("===== " + name + " =====\n" + body)
+        body = read_with_fallback(root, team_root, fname)
+        if body is None:
+            body = "(missing)"
+        chunks.append("===== " + name + " =====\n" + body)
     return "\n\n".join(chunks) + "\n" if chunks else ""
 
 
-def do_ledger_append(root, args):
+def do_ledger_append(root, args, team_root=None):
     if not isinstance(args, dict):
         raise ValueError("arguments must be an object")
     if "kind" not in args:
@@ -260,7 +312,7 @@ def do_ledger_append(root, args):
     return "APPENDED"
 
 
-def do_evolution_search(root, args):
+def do_evolution_search(root, args, team_root=None):
     if not isinstance(args, dict):
         raise ValueError("arguments must be an object")
     if "query" not in args:
@@ -271,13 +323,11 @@ def do_evolution_search(root, args):
         raise ValueError("query must be a string")
     if not isinstance(limit, int) or isinstance(limit, bool):
         raise ValueError("limit must be an int")
-    if not os.path.isdir(root):
+    if team_root is None and not os.path.isdir(root):
         return "NO_EVOLUTION_ENTRIES"
-    with file_lock(root, "EVOLUTION.md", False):
-        evo_path = os.path.join(root, "EVOLUTION.md")
-        if not os.path.exists(evo_path):
-            return "NO_EVOLUTION_ENTRIES"
-        raw = read_text(evo_path)
+    raw = read_with_fallback(root, team_root, "EVOLUTION.md")
+    if raw is None:
+        return "NO_EVOLUTION_ENTRIES"
     entries = []
     current = None
     for line in raw.splitlines():
@@ -310,7 +360,7 @@ def do_evolution_search(root, args):
     return "\n\n".join(lines)
 
 
-def do_evolution_record(root, args):
+def do_evolution_record(root, args, team_root=None):
     if not isinstance(args, dict):
         raise ValueError("arguments must be an object")
     for k in ("task", "decision", "reason"):
@@ -349,7 +399,7 @@ def do_evolution_record(root, args):
     return "EVOLUTION_RECORDED"
 
 
-def do_pending_add(root, args):
+def do_pending_add(root, args, team_root=None):
     if not isinstance(args, dict):
         raise ValueError("arguments must be an object")
     if "question" not in args:
@@ -387,7 +437,7 @@ def do_pending_add(root, args):
     return s + "count: " + str(count)
 
 
-def do_pending_get(root, args):
+def do_pending_get(root, args, team_root=None):
     if not os.path.isdir(root):
         return "NO_PENDING"
     with file_lock(root, "PENDING.md", False):
@@ -400,7 +450,7 @@ def do_pending_get(root, args):
         return body
 
 
-def do_pending_clear(root, args):
+def do_pending_clear(root, args, team_root=None):
     if not isinstance(args, dict):
         raise ValueError("arguments must be an object")
     if "confirmed_summary" not in args:
@@ -620,7 +670,8 @@ def handle_message(msg, root):
         try:
             if name not in HANDLERS:
                 raise ValueError("unknown tool: %r" % (name,))
-            text = HANDLERS[name](root, arguments)
+            eff_root, team_root = resolve_roots(root, params)
+            text = HANDLERS[name](eff_root, arguments, team_root)
             if not isinstance(text, str):
                 text = str(text)
             return {"jsonrpc": "2.0", "id": req_id, "result": {"content": [{"type": "text", "text": text}]}}
