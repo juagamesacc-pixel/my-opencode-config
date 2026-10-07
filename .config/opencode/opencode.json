@@ -7,8 +7,11 @@
       "type": "local",
       "command": [
         "python3",
-        "/content/opencode-agent2/.memory/tools/memory_mcp.py"
+        "/content/opencode-agent2/.memory/tools/memory_mcp.py",
+        "--root",
+        "/content/opencode-agent2/.memory"
       ],
+      "cwd": "/content/opencode-agent2",
       "enabled": true,
       "timeout": 10000
     },

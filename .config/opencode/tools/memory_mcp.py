@@ -10,11 +10,7 @@ from datetime import datetime, timezone
 from contextlib import contextmanager
 
 
-DEFAULT_ROOT = None
-
-
-def default_root():
-    return os.path.join(os.getcwd(), ".memory")
+DEFAULT_ROOT = "/content/opencode-agent2/.memory"
 
 
 def iso_now():
@@ -30,67 +26,13 @@ def ensure_dirs(root):
     os.makedirs(os.path.join(root, "archive"), exist_ok=True)
 
 
-SESSION_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
-
-# Reads of these files fall back to the team root when the session-scoped file
-# is missing, so team knowledge stays shared. Every other file is strictly
-# session-scoped, and writes with a valid session id never touch the team root.
-SESSION_READ_THROUGH = ("USER.md", "EVOLUTION.md")
-
-
-def session_id_from_params(params):
-    # Part B sends the session id as JSON-RPC `_meta.sessionId` (spec-reserved
-    # metadata; verified to reach the server over stdio with the vendored MCP
-    # SDK, so no fallback shape exists). Anything else falls back to old
-    # behavior: invalid/absent id -> default root.
-    if not isinstance(params, dict):
-        return None
-    meta = params.get("_meta")
-    if not isinstance(meta, dict):
-        return None
-    sid = meta.get("sessionId")
-    if not isinstance(sid, str):
-        return None
-    if not SESSION_ID_RE.match(sid):
-        return None
-    return sid
-
-
-def resolve_roots(root, params):
-    """Return (effective_root, team_root_or_None) for one tools/call."""
-    sid = session_id_from_params(params)
-    if sid is None:
-        return root, None
-    return os.path.join(root, "sessions", sid), root
-
-
-def read_with_fallback(root, team_root, fname):
-    """Read fname under root, falling back to team_root for shared files.
-
-    Returns the file body, or None when missing in both places. Never creates
-    directories; lock files live next to the files they guard (inside the
-    session dir when session-scoped). A missing session dir is not an error:
-    shared files still fall back to the team root.
-    """
-    if os.path.isdir(root):
-        fpath = os.path.join(root, fname)
-        with file_lock(root, fname, False):
-            if os.path.exists(fpath):
-                return read_text(fpath)
-    if team_root is not None and fname in SESSION_READ_THROUGH and os.path.isdir(team_root):
-        tpath = os.path.join(team_root, fname)
-        with file_lock(team_root, fname, False):
-            if os.path.exists(tpath):
-                return read_text(tpath)
-    return None
-
-
 @contextmanager
-def file_lock(root, name, exclusive=True):
-    lock_path = os.path.join(root, "." + name + ".lock")
+def file_lock(root):
+    ensure_dirs(root)
+    lock_path = os.path.join(root, ".lock")
     f = open(lock_path, "a+", encoding="utf-8")
     try:
-        fcntl.flock(f, fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH)
+        fcntl.flock(f, fcntl.LOCK_EX)
         yield
     finally:
         try:
@@ -115,7 +57,7 @@ def read_text(path):
 
 # ---------------- tools ----------------
 
-def do_goal_set(root, args, team_root=None):
+def do_goal_set(root, args):
     if not isinstance(args, dict):
         raise ValueError("arguments must be an object")
     if "user_ask" not in args:
@@ -140,8 +82,8 @@ def do_goal_set(root, args, team_root=None):
     if approved not in ("pending", "yes", "no"):
         raise ValueError("approved must be one of pending, yes, no")
     ts = iso_now()
-    ensure_dirs(root)
-    with file_lock(root, "GOAL.md", True):
+    with file_lock(root):
+        ensure_dirs(root)
         goal_path = os.path.join(root, "GOAL.md")
         if os.path.exists(goal_path):
             arch = os.path.join(root, "archive", "GOAL-" + compact_now() + ".md")
@@ -166,17 +108,15 @@ def do_goal_set(root, args, team_root=None):
     return "GOAL_SET"
 
 
-def do_goal_get(root, args, team_root=None):
-    goal_path = os.path.join(root, "GOAL.md")
-    if not os.path.isdir(root):
-        return "NO_GOAL_SET"
-    with file_lock(root, "GOAL.md", False):
+def do_goal_get(root, args):
+    with file_lock(root):
+        goal_path = os.path.join(root, "GOAL.md")
         if not os.path.exists(goal_path):
             return "NO_GOAL_SET"
         return read_text(goal_path)
 
 
-def do_state_update(root, args, team_root=None):
+def do_state_update(root, args):
     if not isinstance(args, dict):
         raise ValueError("arguments must be an object")
     if "current_step" not in args:
@@ -227,8 +167,8 @@ def do_state_update(root, args, team_root=None):
     parts.append("## Unverified")
     parts.append(fmt_list(unverified))
     content = "\n".join(parts) + "\n"
-    ensure_dirs(root)
-    with file_lock(root, "STATE.md", True):
+    with file_lock(root):
+        ensure_dirs(root)
         final_path = os.path.join(root, "STATE.md")
         tmp_path = os.path.join(root, "STATE.md.tmp")
         with open(tmp_path, "w", encoding="utf-8") as f:
@@ -237,7 +177,7 @@ def do_state_update(root, args, team_root=None):
     return "STATE_UPDATED"
 
 
-def do_context_read(root, args, team_root=None):
+def do_context_read(root, args):
     if args is None:
         args = {}
     if not isinstance(args, dict):
@@ -261,22 +201,20 @@ def do_context_read(root, args, team_root=None):
             raise ValueError("unknown file name: %r. valid names: %s" % (name, ", ".join(valid)))
     if "all" in files:
         files = order_all
-    if team_root is None and not os.path.isdir(root):
+    with file_lock(root):
         chunks = []
         for name in files:
-            chunks.append("===== " + name + " =====\n(missing)")
+            fname = mapping[name]
+            fpath = os.path.join(root, fname)
+            if os.path.exists(fpath):
+                body = read_text(fpath)
+            else:
+                body = "(missing)"
+            chunks.append("===== " + name + " =====\n" + body)
         return "\n\n".join(chunks) + "\n" if chunks else ""
-    chunks = []
-    for name in files:
-        fname = mapping[name]
-        body = read_with_fallback(root, team_root, fname)
-        if body is None:
-            body = "(missing)"
-        chunks.append("===== " + name + " =====\n" + body)
-    return "\n\n".join(chunks) + "\n" if chunks else ""
 
 
-def do_ledger_append(root, args, team_root=None):
+def do_ledger_append(root, args):
     if not isinstance(args, dict):
         raise ValueError("arguments must be an object")
     if "kind" not in args:
@@ -297,8 +235,8 @@ def do_ledger_append(root, args, team_root=None):
         raise ValueError("agent must be a string")
     ts = iso_now()
     fname = "LOG.md" if kind == "log" else "DECISIONS.md"
-    ensure_dirs(root)
-    with file_lock(root, fname, True):
+    with file_lock(root):
+        ensure_dirs(root)
         path = os.path.join(root, fname)
         s = "## " + ts + "[ " + agent + " ] " + text + "\n"
         if evidence:
@@ -312,7 +250,7 @@ def do_ledger_append(root, args, team_root=None):
     return "APPENDED"
 
 
-def do_evolution_search(root, args, team_root=None):
+def do_evolution_search(root, args):
     if not isinstance(args, dict):
         raise ValueError("arguments must be an object")
     if "query" not in args:
@@ -323,11 +261,11 @@ def do_evolution_search(root, args, team_root=None):
         raise ValueError("query must be a string")
     if not isinstance(limit, int) or isinstance(limit, bool):
         raise ValueError("limit must be an int")
-    if team_root is None and not os.path.isdir(root):
-        return "NO_EVOLUTION_ENTRIES"
-    raw = read_with_fallback(root, team_root, "EVOLUTION.md")
-    if raw is None:
-        return "NO_EVOLUTION_ENTRIES"
+    with file_lock(root):
+        evo_path = os.path.join(root, "EVOLUTION.md")
+        if not os.path.exists(evo_path):
+            return "NO_EVOLUTION_ENTRIES"
+        raw = read_text(evo_path)
     entries = []
     current = None
     for line in raw.splitlines():
@@ -360,7 +298,7 @@ def do_evolution_search(root, args, team_root=None):
     return "\n\n".join(lines)
 
 
-def do_evolution_record(root, args, team_root=None):
+def do_evolution_record(root, args):
     if not isinstance(args, dict):
         raise ValueError("arguments must be an object")
     for k in ("task", "decision", "reason"):
@@ -387,8 +325,8 @@ def do_evolution_record(root, args, team_root=None):
     ts = iso_now()
     tools_str = ",".join(tools_requested) if tools_requested else "none"
     outcome_str = outcome if outcome else "-"
-    ensure_dirs(root)
-    with file_lock(root, "EVOLUTION.md", True):
+    with file_lock(root):
+        ensure_dirs(root)
         path = os.path.join(root, "EVOLUTION.md")
         s = "## " + ts + " | task: " + task + " | tools: " + tools_str + " | decision: " + decision + " | reason: " + reason + " | outcome: " + outcome_str + "\n"
         f = open(path, "a", encoding="utf-8")
@@ -399,7 +337,7 @@ def do_evolution_record(root, args, team_root=None):
     return "EVOLUTION_RECORDED"
 
 
-def do_pending_add(root, args, team_root=None):
+def do_pending_add(root, args):
     if not isinstance(args, dict):
         raise ValueError("arguments must be an object")
     if "question" not in args:
@@ -419,8 +357,8 @@ def do_pending_add(root, args, team_root=None):
     if not isinstance(context, str):
         raise ValueError("context must be a string")
     ts = iso_now()
-    ensure_dirs(root)
-    with file_lock(root, "PENDING.md", True):
+    with file_lock(root):
+        ensure_dirs(root)
         path = os.path.join(root, "PENDING.md")
         s = "### " + ts + " [" + category + "] " + question + "\nwhy: " + why + "\ncontext: " + context + "\n\n"
         f = open(path, "a", encoding="utf-8")
@@ -437,10 +375,8 @@ def do_pending_add(root, args, team_root=None):
     return s + "count: " + str(count)
 
 
-def do_pending_get(root, args, team_root=None):
-    if not os.path.isdir(root):
-        return "NO_PENDING"
-    with file_lock(root, "PENDING.md", False):
+def do_pending_get(root, args):
+    with file_lock(root):
         path = os.path.join(root, "PENDING.md")
         if not os.path.exists(path):
             return "NO_PENDING"
@@ -450,7 +386,7 @@ def do_pending_get(root, args, team_root=None):
         return body
 
 
-def do_pending_clear(root, args, team_root=None):
+def do_pending_clear(root, args):
     if not isinstance(args, dict):
         raise ValueError("arguments must be an object")
     if "confirmed_summary" not in args:
@@ -459,8 +395,8 @@ def do_pending_clear(root, args, team_root=None):
     if not isinstance(confirmed_summary, str):
         raise ValueError("confirmed_summary must be a string")
     ts = iso_now()
-    ensure_dirs(root)
-    with file_lock(root, "PENDING.md", True):
+    with file_lock(root):
+        ensure_dirs(root)
         ppath = os.path.join(root, "PENDING.md")
         prev = ""
         has_content = False
@@ -486,7 +422,6 @@ def do_pending_clear(root, args, team_root=None):
             f.write("# PENDING (empty)\n")
         log_path = os.path.join(root, "LOG.md")
         s = "## " + ts + " [pending] cleared after compiled confirmation: " + confirmed_summary + "\n\n"
-    with file_lock(root, "LOG.md", True):
         f2 = open(log_path, "a", encoding="utf-8")
         try:
             f2.write(s)
@@ -670,8 +605,7 @@ def handle_message(msg, root):
         try:
             if name not in HANDLERS:
                 raise ValueError("unknown tool: %r" % (name,))
-            eff_root, team_root = resolve_roots(root, params)
-            text = HANDLERS[name](eff_root, arguments, team_root)
+            text = HANDLERS[name](root, arguments)
             if not isinstance(text, str):
                 text = str(text)
             return {"jsonrpc": "2.0", "id": req_id, "result": {"content": [{"type": "text", "text": text}]}}
@@ -692,9 +626,10 @@ def handle_message(msg, root):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--root", default=None)
+    parser.add_argument("--root", default=DEFAULT_ROOT)
     args = parser.parse_args()
-    root = args.root if args.root is not None else default_root()
+    root = args.root
+    ensure_dirs(root)
     stdin = sys.stdin
     stdout = sys.stdout
     while True:
