@@ -10,7 +10,11 @@ from datetime import datetime, timezone
 from contextlib import contextmanager
 
 
-DEFAULT_ROOT = "/content/opencode-agent2/.memory"
+DEFAULT_ROOT = None
+
+
+def default_root():
+    return os.path.join(os.getcwd(), ".memory")
 
 
 def iso_now():
@@ -27,12 +31,11 @@ def ensure_dirs(root):
 
 
 @contextmanager
-def file_lock(root):
-    ensure_dirs(root)
-    lock_path = os.path.join(root, ".lock")
+def file_lock(root, name, exclusive=True):
+    lock_path = os.path.join(root, "." + name + ".lock")
     f = open(lock_path, "a+", encoding="utf-8")
     try:
-        fcntl.flock(f, fcntl.LOCK_EX)
+        fcntl.flock(f, fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH)
         yield
     finally:
         try:
@@ -82,8 +85,8 @@ def do_goal_set(root, args):
     if approved not in ("pending", "yes", "no"):
         raise ValueError("approved must be one of pending, yes, no")
     ts = iso_now()
-    with file_lock(root):
-        ensure_dirs(root)
+    ensure_dirs(root)
+    with file_lock(root, "GOAL.md", True):
         goal_path = os.path.join(root, "GOAL.md")
         if os.path.exists(goal_path):
             arch = os.path.join(root, "archive", "GOAL-" + compact_now() + ".md")
@@ -109,8 +112,10 @@ def do_goal_set(root, args):
 
 
 def do_goal_get(root, args):
-    with file_lock(root):
-        goal_path = os.path.join(root, "GOAL.md")
+    goal_path = os.path.join(root, "GOAL.md")
+    if not os.path.isdir(root):
+        return "NO_GOAL_SET"
+    with file_lock(root, "GOAL.md", False):
         if not os.path.exists(goal_path):
             return "NO_GOAL_SET"
         return read_text(goal_path)
@@ -167,8 +172,8 @@ def do_state_update(root, args):
     parts.append("## Unverified")
     parts.append(fmt_list(unverified))
     content = "\n".join(parts) + "\n"
-    with file_lock(root):
-        ensure_dirs(root)
+    ensure_dirs(root)
+    with file_lock(root, "STATE.md", True):
         final_path = os.path.join(root, "STATE.md")
         tmp_path = os.path.join(root, "STATE.md.tmp")
         with open(tmp_path, "w", encoding="utf-8") as f:
@@ -201,17 +206,22 @@ def do_context_read(root, args):
             raise ValueError("unknown file name: %r. valid names: %s" % (name, ", ".join(valid)))
     if "all" in files:
         files = order_all
-    with file_lock(root):
+    if not os.path.isdir(root):
         chunks = []
         for name in files:
-            fname = mapping[name]
-            fpath = os.path.join(root, fname)
+            chunks.append("===== " + name + " =====\n(missing)")
+        return "\n\n".join(chunks) + "\n" if chunks else ""
+    chunks = []
+    for name in files:
+        fname = mapping[name]
+        fpath = os.path.join(root, fname)
+        with file_lock(root, fname, False):
             if os.path.exists(fpath):
                 body = read_text(fpath)
             else:
                 body = "(missing)"
             chunks.append("===== " + name + " =====\n" + body)
-        return "\n\n".join(chunks) + "\n" if chunks else ""
+    return "\n\n".join(chunks) + "\n" if chunks else ""
 
 
 def do_ledger_append(root, args):
@@ -235,8 +245,8 @@ def do_ledger_append(root, args):
         raise ValueError("agent must be a string")
     ts = iso_now()
     fname = "LOG.md" if kind == "log" else "DECISIONS.md"
-    with file_lock(root):
-        ensure_dirs(root)
+    ensure_dirs(root)
+    with file_lock(root, fname, True):
         path = os.path.join(root, fname)
         s = "## " + ts + "[ " + agent + " ] " + text + "\n"
         if evidence:
@@ -261,7 +271,9 @@ def do_evolution_search(root, args):
         raise ValueError("query must be a string")
     if not isinstance(limit, int) or isinstance(limit, bool):
         raise ValueError("limit must be an int")
-    with file_lock(root):
+    if not os.path.isdir(root):
+        return "NO_EVOLUTION_ENTRIES"
+    with file_lock(root, "EVOLUTION.md", False):
         evo_path = os.path.join(root, "EVOLUTION.md")
         if not os.path.exists(evo_path):
             return "NO_EVOLUTION_ENTRIES"
@@ -325,8 +337,8 @@ def do_evolution_record(root, args):
     ts = iso_now()
     tools_str = ",".join(tools_requested) if tools_requested else "none"
     outcome_str = outcome if outcome else "-"
-    with file_lock(root):
-        ensure_dirs(root)
+    ensure_dirs(root)
+    with file_lock(root, "EVOLUTION.md", True):
         path = os.path.join(root, "EVOLUTION.md")
         s = "## " + ts + " | task: " + task + " | tools: " + tools_str + " | decision: " + decision + " | reason: " + reason + " | outcome: " + outcome_str + "\n"
         f = open(path, "a", encoding="utf-8")
@@ -357,8 +369,8 @@ def do_pending_add(root, args):
     if not isinstance(context, str):
         raise ValueError("context must be a string")
     ts = iso_now()
-    with file_lock(root):
-        ensure_dirs(root)
+    ensure_dirs(root)
+    with file_lock(root, "PENDING.md", True):
         path = os.path.join(root, "PENDING.md")
         s = "### " + ts + " [" + category + "] " + question + "\nwhy: " + why + "\ncontext: " + context + "\n\n"
         f = open(path, "a", encoding="utf-8")
@@ -376,7 +388,9 @@ def do_pending_add(root, args):
 
 
 def do_pending_get(root, args):
-    with file_lock(root):
+    if not os.path.isdir(root):
+        return "NO_PENDING"
+    with file_lock(root, "PENDING.md", False):
         path = os.path.join(root, "PENDING.md")
         if not os.path.exists(path):
             return "NO_PENDING"
@@ -395,8 +409,8 @@ def do_pending_clear(root, args):
     if not isinstance(confirmed_summary, str):
         raise ValueError("confirmed_summary must be a string")
     ts = iso_now()
-    with file_lock(root):
-        ensure_dirs(root)
+    ensure_dirs(root)
+    with file_lock(root, "PENDING.md", True):
         ppath = os.path.join(root, "PENDING.md")
         prev = ""
         has_content = False
@@ -422,6 +436,7 @@ def do_pending_clear(root, args):
             f.write("# PENDING (empty)\n")
         log_path = os.path.join(root, "LOG.md")
         s = "## " + ts + " [pending] cleared after compiled confirmation: " + confirmed_summary + "\n\n"
+    with file_lock(root, "LOG.md", True):
         f2 = open(log_path, "a", encoding="utf-8")
         try:
             f2.write(s)
@@ -626,10 +641,9 @@ def handle_message(msg, root):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--root", default=DEFAULT_ROOT)
+    parser.add_argument("--root", default=None)
     args = parser.parse_args()
-    root = args.root
-    ensure_dirs(root)
+    root = args.root if args.root is not None else default_root()
     stdin = sys.stdin
     stdout = sys.stdout
     while True:
