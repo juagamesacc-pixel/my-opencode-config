@@ -605,7 +605,15 @@ def handle_message(msg, root):
         try:
             if name not in HANDLERS:
                 raise ValueError("unknown tool: %r" % (name,))
-            text = HANDLERS[name](root, arguments)
+            eff_root = root
+            try:
+                meta = params.get("_meta") if isinstance(params, dict) else None
+                sid = meta.get("opencode/session-id") if isinstance(meta, dict) else None
+                if isinstance(sid, str) and sid and re.match(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$", sid):
+                    eff_root = os.path.join(root, "sessions", sid)
+            except Exception:
+                eff_root = root
+            text = HANDLERS[name](eff_root, arguments)
             if not isinstance(text, str):
                 text = str(text)
             return {"jsonrpc": "2.0", "id": req_id, "result": {"content": [{"type": "text", "text": text}]}}
