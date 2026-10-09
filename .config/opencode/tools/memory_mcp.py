@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from contextlib import contextmanager
 
 
-DEFAULT_ROOT = "/content/opencode-agent2/.memory"
+DEFAULT_ROOT = "/content/workspace/.memory"
 
 
 def iso_now():
