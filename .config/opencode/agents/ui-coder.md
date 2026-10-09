@@ -96,7 +96,7 @@ Return: files changed (path:line), build/typecheck commands + results, glance-te
 
 ## Memory rules (MCP server `memory`)
 
-Team memory lives ONLY in `/content/opencode-agent2/.memory/`. Use the MCP tools `context_read`, `goal_get`, `ledger_append`, `pending_add` (exact names in your tool list); fallback = the same files directly with identical formats.
+Team memory lives ONLY in `/content/workspace/.memory/`. Use the MCP tools `context_read`, `goal_get`, `ledger_append`, `pending_add` (exact names in your tool list); fallback = the same files directly with identical formats.
 
 **USE WHEN**
 - **FIRST ACTION on every task — before glob/read/edit/bash:** `context_read(['goal','state','user'])`. Build the persisted goal's interface, not your own reading of it. Starting work without hydrating = protocol violation.
