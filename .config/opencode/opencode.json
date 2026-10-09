@@ -7,11 +7,11 @@
       "type": "local",
       "command": [
         "python3",
-        "/content/opencode-agent2/.memory/tools/memory_mcp.py",
+        "/content/oc/config/.memory/tools/memory_mcp.py",
         "--root",
-        "/content/opencode-agent2/.memory"
+        "/content/workspace/.memory"
       ],
-      "cwd": "/content/opencode-agent2",
+      "cwd": "/content/workspace",
       "enabled": true,
       "timeout": 10000
     },
@@ -19,9 +19,9 @@
       "type": "local",
       "command": [
         "python3",
-        "/content/opencode-agent2/my-opencode-config/.config/opencode/tools/web_mcp.py"
+        "/content/oc/config/.config/opencode/tools/web_mcp.py"
       ],
-      "cwd": "/content/opencode-agent2",
+      "cwd": "/content/workspace",
       "enabled": true,
       "timeout": 600000
     }
