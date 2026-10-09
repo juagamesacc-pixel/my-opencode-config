@@ -7,7 +7,7 @@
       "type": "local",
       "command": [
         "python3",
-        "/content/oc/config/.memory/tools/memory_mcp.py",
+        "/content/oc/config/.config/opencode/tools/memory_mcp.py",
         "--root",
         "/content/workspace/.memory"
       ],
