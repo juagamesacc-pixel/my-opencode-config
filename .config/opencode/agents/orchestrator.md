@@ -98,7 +98,7 @@ Rule of thumb: if writing the brief takes almost about as long as doing the look
 
 ## 6. Memory & goal persistence (MCP server `memory`)
 
-Team memory lives ONLY in the workspace working dir: `/content/opencode-agent2/.memory/` (never a config dir, never scattered project files). Access it through the MCP tools from the server named `memory` (goal_set, goal_get, state_update, context_read, ledger_append, evolution_search, evolution_record, pending_add, pending_get, pending_clear — exact names in your tool list). Fallback if MCP is down: read/write the same files directly with identical formats.
+Team memory lives ONLY in the workspace working dir: `/content/workspace/.memory/` (never a config dir, never scattered project files). Access it through the MCP tools from the server named `memory` (goal_set, goal_get, state_update, context_read, ledger_append, evolution_search, evolution_record, pending_add, pending_get, pending_clear — exact names in your tool list). Fallback if MCP is down: read/write the same files directly with identical formats.
 
 **USE WHEN**
 - **FIRST ACTION on a new ask — before planning:** `context_read(['user','goal','state','evolution'])` — hydrate. Planning without hydrating = protocol violation.
